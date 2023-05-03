@@ -62,7 +62,7 @@ always @(posedge clk) begin
   else PC <= NEXT_PC;
 end
 
-assign NEXT_PC=PC_PLUS_4;
+//assign NEXT_PC=PC_PLUS_4;
 
 /* instruction: read current instruction from inst mem */
 instruction_memory m_instruction_memory(
@@ -236,6 +236,7 @@ wire mem_taken;
 wire ex_alu_check;
 wire [3:0] ex_alu_func;
 wire [31:0] ex_alu_in2;
+wire [31:0] ex_alu_in2_temp;
 
 /* m_branch_control : checks T/NT */
 branch_control m_branch_control(
@@ -259,15 +260,57 @@ mux_2x1 m_mux_2x1(
   .in1(ex_readdata2),
   .in2(ex_sextimm),
   
-  .out(ex_alu_in2)
+  .out(ex_alu_in2_temp)
 );
 
+wire mem_mem_read;
+wire mem_mem_write;
+wire mem_mem_to_reg;
+wire mem_reg_write;
+wire [1:0] mem_alu_op;
+wire mem_alu_src;
+wire [1:0] mem_jump;
 wire [31:0] ex_alu_in1;
 wire [31:0] ex_alu_result;
 wire [31:0] mem_alu_result;
 wire [31:0] wb_alu_result;
 
-assign ex_alu_in1 = ex_readdata1;
+wire[1:0] forwarding_1;
+wire[1:0] forwarding_2;
+
+forwarding m_forwarding(
+  // TODO: implement forwarding unit & do wiring
+  .rs1_ex         (ex_readreg1),
+  .rs2_ex         (ex_readreg2),
+  .rd_mem         (mem_writereg),
+  .rd_wb          (wb_writereg),
+  .mem_reg_write  (mem_reg_write),
+  .wb_reg_write   (wb_reg_write),
+
+  .forwarding_1   (forwarding_1),
+  .forwarding_2   (forwarding_2)
+
+);
+
+mux_3x1 m_mux_3x1(
+  .select(forwarding_1),
+  .in1(ex_readdata1),
+  .in2(write_data),
+  .in3(mem_alu_result),
+  
+  .out(ex_alu_in1)
+);
+
+mux_3x1 m_mux_3x1_2(
+  .select(forwarding_2),
+  .in1(ex_alu_in2_temp),
+  .in2(write_data),
+  .in3(mem_alu_result),
+  
+  .out(ex_alu_in2)
+);
+
+//assign ex_alu_in1 = ex_readdata1;
 
 /* m_alu */
 alu m_alu(
@@ -279,17 +322,6 @@ alu m_alu(
   .check    (ex_alu_check)
 );
 
-forwarding m_forwarding(
-  // TODO: implement forwarding unit & do wiring
-);
-
-wire mem_mem_read;
-wire mem_mem_write;
-wire mem_mem_to_reg;
-wire mem_reg_write;
-wire [1:0] mem_alu_op;
-wire mem_alu_src;
-wire [1:0] mem_jump;
 
 /* forward to EX/MEM stage registers */
 exmem_reg m_exmem_reg(
@@ -326,6 +358,17 @@ exmem_reg m_exmem_reg(
 //////////////////////////////////////////////////////////////////////////////////
 // Memory (MEM) 
 //////////////////////////////////////////////////////////////////////////////////
+
+
+mux_2x1 m_mux_2x1_branch(
+  .select(mem_taken),
+  .in1(mem_PC_PLUS_4),
+  .in2(mem_PC_BRANCH),
+  
+  .out(NEXT_PC)
+);
+
+
 
 wire [1:0] maskmode ;
 assign maskmode = mem_funct3[1:0];
