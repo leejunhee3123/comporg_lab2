@@ -28,6 +28,8 @@ module exmem_reg #(
   input [DATA_WIDTH-1:0] ex_writedata,
   input [2:0] ex_funct3,
   input [4:0] ex_rd,
+
+  input [DATA_WIDTH-1:0] ex_jalr,
   
   //////////////////////////////////////
   // Outputs
@@ -48,7 +50,9 @@ module exmem_reg #(
   output [DATA_WIDTH-1:0] mem_alu_result,
   output [DATA_WIDTH-1:0] mem_writedata,
   output [2:0] mem_funct3,
-  output [4:0] mem_rd
+  output [4:0] mem_rd,
+  
+  output [DATA_WIDTH-1:0] mem_jalr
 );
 
 reg mem_pc_plus_4;
@@ -63,6 +67,7 @@ reg mem_funct3;
 reg mem_alu_result;
 reg mem_writedata;
 reg mem_rd;
+reg mem_jalr;
 
 
 
@@ -79,6 +84,7 @@ always @(posedge clk) begin
   mem_alu_result<=ex_alu_result;
   mem_writedata<=ex_writedata;
   mem_rd<=ex_rd;
+  mem_jalr<=ex_jalr;
 end
 
 // TODO: Implement EX / MEM pipeline register module

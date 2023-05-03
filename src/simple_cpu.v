@@ -37,8 +37,8 @@ wire [DATA_WIDTH-1:0] wb_PC_PLUS_4;
 wire [DATA_WIDTH-1:0] NEXT_PC;
 wire [DATA_WIDTH-1:0] PC_BRANCH;
 wire [DATA_WIDTH-1:0] mem_PC_BRANCH;
-wire [31:0] branch_out;
-wire [31:0] jalr_out;
+wire [DATA_WIDTH-1:0] jalr_out;
+wire [DATA_WIDTH-1:0] mem_jalr_out;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Instruction Fetch (IF)
@@ -89,10 +89,12 @@ ifid_reg m_ifid_reg(
 // Instruction Decode (ID)
 //////////////////////////////////////////////////////////////////////////////////
 
-/* m_hazard: hazard detection unit */
-hazard m_hazard(
-  // TODO: implement hazard detection unit & do wiring
-);
+
+
+
+wire mem_taken;
+wire [1:0] mem_jump;
+
 wire [31:0] readdata1, readdata2;
 wire [31:0] ex_readdata1, ex_readdata2;
 wire [31:0] mem_readdata2;
@@ -176,6 +178,57 @@ register_file m_register_file(
   .readdata2  (readdata2)
 );
 
+wire flush;
+/* m_hazard: hazard detection unit */
+hazard m_hazard(
+  .mem_taken(mem_taken),
+  .mem_PC_PLUS_4(mem_PC_PLUS_4),
+  .mem_PC_BRANCH(mem_PC_BRANCH),
+  .mem_jump(mem_jump),
+  .mem_jalr_out(mem_jalr_out),
+  .id_pc(id_PC),
+  
+  .flush(flush)
+  // TODO: implement hazard detection unit & do wiring
+);
+wire memwrite;
+wire regwrite;
+wire ex_memwrite;
+wire ex_regwrite;
+
+mux_2x1 m_flush_mux1(
+  .select(flush),
+  .in1(mem_write),
+  .in2(32'h00000000),
+  
+  .out(memwrite)
+);
+
+mux_2x1 m_flush_mux2(
+  .select(flush),
+  .in1(reg_write),
+  .in2(32'h00000000),
+  
+  .out(regwrite)
+);
+
+mux_2x1 m_flush_mux3(
+  .select(flush),
+  .in1(ex_mem_write),
+  .in2(32'h00000000),
+  
+  .out(ex_memwrite)
+);
+
+mux_2x1 m_flush_mux4(
+  .select(flush),
+  .in1(ex_reg_write),
+  .in2(32'h00000000),
+  
+  .out(ex_regwrite)
+);
+
+
 /* forward to ID/EX stage registers */
 idex_reg m_idex_reg(
   // TODO: Add flush or stall signal if it is needed
@@ -187,9 +240,9 @@ idex_reg m_idex_reg(
   .id_aluop     (alu_op),
   .id_alusrc    (alu_src),
   .id_memread   (mem_read),
-  .id_memwrite  (mem_write),
+  .id_memwrite  (memwrite),
   .id_memtoreg  (mem_to_reg),
-  .id_regwrite  (reg_write),
+  .id_regwrite  (regwrite),
   .id_sextimm   (sextimm),
   .id_funct7    (funct7),
   .id_funct3    (funct3),
@@ -231,8 +284,16 @@ adder m_branch_target_adder(
   .result (PC_BRANCH)
 );
 
+
+
+adder m_adder_for_jalr(
+  .in_a(ex_sextimm),
+  .in_b(ex_readdata1),
+
+  .result(jalr_out)
+);
+
 wire ex_taken;
-wire mem_taken;
 wire ex_alu_check;
 wire [3:0] ex_alu_func;
 wire [31:0] ex_alu_in2;
@@ -269,7 +330,6 @@ wire mem_mem_to_reg;
 wire mem_reg_write;
 wire [1:0] mem_alu_op;
 wire mem_alu_src;
-wire [1:0] mem_jump;
 wire [31:0] ex_alu_in1;
 wire [31:0] ex_alu_result;
 wire [31:0] mem_alu_result;
@@ -332,13 +392,14 @@ exmem_reg m_exmem_reg(
   .ex_taken       (ex_taken), 
   .ex_jump        (ex_jump),
   .ex_memread     (ex_mem_read),
-  .ex_memwrite    (ex_mem_write),
+  .ex_memwrite    (ex_memwrite),
   .ex_memtoreg    (ex_mem_to_reg),
-  .ex_regwrite    (ex_reg_write),
+  .ex_regwrite    (ex_regwrite),
   .ex_alu_result  (ex_alu_result),
   .ex_writedata   (ex_readdata2),
   .ex_funct3      (ex_funct3),
   .ex_rd          (ex_writereg),
+  .ex_jalr        (jalr_out),
   
   .mem_pc_plus_4  (mem_PC_PLUS_4),
   .mem_pc_target  (mem_PC_BRANCH),
@@ -351,7 +412,8 @@ exmem_reg m_exmem_reg(
   .mem_alu_result (mem_alu_result),
   .mem_writedata  (mem_readdata2),
   .mem_funct3     (mem_funct3),
-  .mem_rd         (mem_writereg)
+  .mem_rd         (mem_writereg),
+  .mem_jalr       (mem_jalr_out)
 );
 
 
@@ -359,16 +421,25 @@ exmem_reg m_exmem_reg(
 // Memory (MEM) 
 //////////////////////////////////////////////////////////////////////////////////
 
+wire [31:0] branch_out;
 
 mux_2x1 m_mux_2x1_branch(
   .select(mem_taken),
   .in1(mem_PC_PLUS_4),
   .in2(mem_PC_BRANCH),
   
-  .out(NEXT_PC)
+  .out(branch_out)
 );
 
-
+mux_4x1 m_mux_4x1(
+  .select(mem_jump),
+  .in1(branch_out),
+  .in2(branch_out),
+  .in3(mem_PC_BRANCH),
+  .in4(mem_jalr_out),
+  
+  .out(NEXT_PC)
+);
 
 wire [1:0] maskmode ;
 assign maskmode = mem_funct3[1:0];
@@ -433,5 +504,6 @@ mux_2x1 m_mux_2x1_3(
   
   .out(write_data)
 );
+
 
 endmodule
