@@ -1,7 +1,7 @@
 nop
 jal zero, 104
-addi sp, sp, -48
-sw s0, 44(sp)
+addi sp, sp, -48     sp는 x2     sp=68-48=20
+sw s0, 44(sp)            
 addi s0, sp, 48
 sw a0, -36(s0)
 sw a1, -40(s0)
@@ -28,14 +28,14 @@ jalr zero, ra, 0
 addi sp, sp, -32
 sw ra, 28(sp)
 sw s0, 24(sp)
-addi s0, sp, 32
-addi a5, zero, 11
-sw a5, -20(s0)
-addi a5, zero, 11
-sw a5, -24(s0)
-lw a1, -24(s0)
-lw a0, -20(s0)
-jal ra, -140
+addi s0, sp, 32          s0=8
+addi a5, zero, 11       a5=15,  15에 11저장
+sw a5, -20(s0)          11을 data에 저장 
+addi a5, zero, 11      x15에 11저장
+sw a5, -24(s0)         11을 data에 저장
+lw a1, -24(s0)          x11에 11저장
+lw a0, -20(s0)          x10에 11저장 (s0는 x8에 저장)
+jal ra, -140            x1에 저장
 sw a0, -28(s0)
 addi a5, zero, 0
 addi a0, a5, 0

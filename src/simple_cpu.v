@@ -40,6 +40,88 @@ wire [DATA_WIDTH-1:0] mem_PC_BRANCH;
 wire [DATA_WIDTH-1:0] jalr_out;
 wire [DATA_WIDTH-1:0] mem_jalr_out;
 
+wire mem_taken;
+wire [1:0] mem_jump;
+wire [31:0] readdata1, readdata2;
+wire [31:0] ex_readdata1, ex_readdata2;
+wire [31:0] mem_readdata2;
+// 5 bits for each (because there exist 32 registers)
+wire [4:0] readreg1, readreg2, writereg;
+wire [4:0] ex_readreg1, ex_readreg2, ex_writereg;
+wire [4:0] mem_writereg;
+wire [4:0] wb_writereg;
+wire [6:0] opcode;
+wire [6:0] funct7;
+wire [6:0] ex_funct7;
+wire [2:0] funct3;
+wire [2:0] ex_funct3;
+wire [2:0] mem_funct3;
+wire branch;
+wire mem_read;
+wire mem_to_reg;
+wire [1:0] alu_op;
+wire mem_write;
+wire alu_src;
+wire reg_write;
+wire [1:0] jump;
+wire ex_branch;
+wire [1:0] ex_alu_op;
+wire ex_mem_read;
+wire ex_mem_to_reg;
+wire ex_mem_write;
+wire ex_alu_src;
+wire ex_reg_write;
+wire [1:0] ex_jump;
+wire [31:0] sextimm;
+wire [31:0] ex_sextimm;
+assign opcode = id_instruction[6:0];
+assign funct7 = id_instruction[31:25];
+assign funct3 = id_instruction[14:12];
+assign readreg1 = id_instruction[19:15];
+assign readreg2 = id_instruction[24:20];
+assign writereg  = id_instruction[11:7];
+
+wire [DATA_WIDTH-1:0] write_data;
+wire wb_reg_write;
+wire flush;
+wire memwrite;
+wire regwrite;
+wire ex_memwrite;
+wire ex_regwrite;
+
+wire ex_taken;
+wire ex_alu_check;
+wire [3:0] ex_alu_func;
+wire [31:0] ex_alu_in2;
+wire [31:0] ex_alu_in2_temp;
+wire mem_mem_read;
+wire mem_mem_write;
+wire mem_mem_to_reg;
+wire mem_reg_write;
+wire [1:0] mem_alu_op;
+wire mem_alu_src;
+wire [31:0] ex_alu_in1;
+wire [31:0] ex_alu_result;
+wire [31:0] mem_alu_result;
+wire [31:0] wb_alu_result;
+
+wire[1:0] forwarding_1;
+wire[1:0] forwarding_2;
+
+wire [1:0] maskmode ;
+assign maskmode = mem_funct3[1:0];
+wire [DATA_WIDTH-1:0] read_data;
+wire [DATA_WIDTH-1:0] wb_read_data;
+wire wb_mem_to_reg;
+wire [1:0] wb_jump;
+
+
+wire stall;
+wire [DATA_WIDTH-1:0] NEXT_PC_;
+wire [DATA_WIDTH-1:0] ex_NEXT_PC_;
+wire [DATA_WIDTH-1:0] NEXT_PC__;
+wire ex_stall;
+wire ex_flush;
 ///////////////////////////////////////////////////////////////////////////////
 // Instruction Fetch (IF)
 ///////////////////////////////////////////////////////////////////////////////
@@ -62,6 +144,7 @@ always @(posedge clk) begin
   else PC <= NEXT_PC;
 end
 
+
 //assign NEXT_PC=PC_PLUS_4;
 
 /* instruction: read current instruction from inst mem */
@@ -78,6 +161,10 @@ ifid_reg m_ifid_reg(
   .if_PC          (PC),
   .if_pc_plus_4   (PC_PLUS_4),
   .if_instruction (instruction),
+  .stall          (stall),
+  .id_PC_forstall          (id_PC),
+  .id_pc_plus_4_forstall   (id_PC_PLUS_4),
+  .id_instruction_forstall (id_instruction),
 
   .id_PC          (id_PC),
   .id_pc_plus_4   (id_PC_PLUS_4),
@@ -89,53 +176,26 @@ ifid_reg m_ifid_reg(
 // Instruction Decode (ID)
 //////////////////////////////////////////////////////////////////////////////////
 
+/* m_hazard: hazard detection unit */
+hazard m_hazard(
+  .ex_taken(ex_taken),
+  .ex_PC_PLUS_4(ex_PC_PLUS_4),
+  .ex_PC_BRANCH(PC_BRANCH),
+  .jalr_out(jalr_out),
+  .ex_jump(ex_jump),
+  .pc_plus_4(PC_PLUS_4),
+  .ex_writereg(ex_writereg),
+  .ex_mem_read(ex_mem_read),
+  .id_rs1(readreg1),
+  .id_rs2(readreg2),
+  .pc(PC),
+  
+  .stall(stall),
+  .NEXT_PC(NEXT_PC),
+  .flush(flush)
+  // TODO: implement hazard detection unit & do wiring
+);
 
-
-
-wire mem_taken;
-wire [1:0] mem_jump;
-
-wire [31:0] readdata1, readdata2;
-wire [31:0] ex_readdata1, ex_readdata2;
-wire [31:0] mem_readdata2;
-// 5 bits for each (because there exist 32 registers)
-wire [4:0] readreg1, readreg2, writereg;
-wire [4:0] ex_readreg1, ex_readreg2, ex_writereg;
-wire [4:0] mem_writereg;
-wire [4:0] wb_writereg;
-
-wire [6:0] opcode;
-wire [6:0] funct7;
-wire [6:0] ex_funct7;
-wire [2:0] funct3;
-wire [2:0] ex_funct3;
-wire [2:0] mem_funct3;
-
-wire branch;
-wire mem_read;
-wire mem_to_reg;
-wire [1:0] alu_op;
-wire mem_write;
-wire alu_src;
-wire reg_write;
-wire [1:0] jump;
-
-wire ex_branch;
-wire [1:0] ex_alu_op;
-wire ex_mem_read;
-wire ex_mem_to_reg;
-wire ex_mem_write;
-wire ex_alu_src;
-wire ex_reg_write;
-wire [1:0] ex_jump;
-
-wire [31:0] sextimm;
-wire [31:0] ex_sextimm;
-
-assign opcode = id_instruction[6:0];
-
-assign funct7 = id_instruction[31:25];
-assign funct3 = id_instruction[14:12];
 
 /* m_control: control unit */
 control m_control(
@@ -158,15 +218,8 @@ immediate_generator m_immediate_generator(
   .sextimm    (sextimm)
 );
 
-assign readreg1 = id_instruction[19:15];
-assign readreg2 = id_instruction[24:20];
-assign writereg  = id_instruction[11:7];
-
-wire [DATA_WIDTH-1:0] write_data;
-wire wb_reg_write;
-
 /* m_register_file: register file */
-register_file m_register_file(
+register_file  m_register_file(
   .clk        (clk),
   .readreg1   (readreg1),
   .readreg2   (readreg2),
@@ -178,55 +231,6 @@ register_file m_register_file(
   .readdata2  (readdata2)
 );
 
-wire flush;
-/* m_hazard: hazard detection unit */
-hazard m_hazard(
-  .mem_taken(mem_taken),
-  .mem_PC_PLUS_4(mem_PC_PLUS_4),
-  .mem_PC_BRANCH(mem_PC_BRANCH),
-  .mem_jump(mem_jump),
-  .mem_jalr_out(mem_jalr_out),
-  .id_pc(id_PC),
-  
-  .flush(flush)
-  // TODO: implement hazard detection unit & do wiring
-);
-wire memwrite;
-wire regwrite;
-wire ex_memwrite;
-wire ex_regwrite;
-
-mux_2x1 m_flush_mux1(
-  .select(flush),
-  .in1(mem_write),
-  .in2(32'h00000000),
-  
-  .out(memwrite)
-);
-
-mux_2x1 m_flush_mux2(
-  .select(flush),
-  .in1(reg_write),
-  .in2(32'h00000000),
-  
-  .out(regwrite)
-);
-
-mux_2x1 m_flush_mux3(
-  .select(flush),
-  .in1(ex_mem_write),
-  .in2(32'h00000000),
-  
-  .out(ex_memwrite)
-);
-
-mux_2x1 m_flush_mux4(
-  .select(flush),
-  .in1(ex_reg_write),
-  .in2(32'h00000000),
-  
-  .out(ex_regwrite)
-);
 
 
 /* forward to ID/EX stage registers */
@@ -240,9 +244,9 @@ idex_reg m_idex_reg(
   .id_aluop     (alu_op),
   .id_alusrc    (alu_src),
   .id_memread   (mem_read),
-  .id_memwrite  (memwrite),
+  .id_memwrite  (mem_write),
   .id_memtoreg  (mem_to_reg),
-  .id_regwrite  (regwrite),
+  .id_regwrite  (reg_write),
   .id_sextimm   (sextimm),
   .id_funct7    (funct7),
   .id_funct3    (funct3),
@@ -251,6 +255,9 @@ idex_reg m_idex_reg(
   .id_rs1       (readreg1),
   .id_rs2       (readreg2),
   .id_rd        (writereg),
+  .stall        (stall),
+  .flush        (flush),
+  .NEXT_PC_      (NEXT_PC_),
 
   .ex_PC        (ex_PC),
   .ex_pc_plus_4 (ex_PC_PLUS_4),
@@ -269,12 +276,17 @@ idex_reg m_idex_reg(
   .ex_readdata2 (ex_readdata2),
   .ex_rs1       (ex_readreg1),
   .ex_rs2       (ex_readreg2),
-  .ex_rd        (ex_writereg)
+  .ex_rd        (ex_writereg),
+  .ex_stall     (ex_stall),
+  .ex_flush     (ex_flush),
+  .ex_NEXT_PC_  (ex_NEXT_PC_)
 );
 
 //////////////////////////////////////////////////////////////////////////////////
 // Execute (EX) 
 //////////////////////////////////////////////////////////////////////////////////
+
+
 
 /* m_branch_target_adder: PC + imm for branch address */
 adder m_branch_target_adder(
@@ -292,12 +304,6 @@ adder m_adder_for_jalr(
 
   .result(jalr_out)
 );
-
-wire ex_taken;
-wire ex_alu_check;
-wire [3:0] ex_alu_func;
-wire [31:0] ex_alu_in2;
-wire [31:0] ex_alu_in2_temp;
 
 /* m_branch_control : checks T/NT */
 branch_control m_branch_control(
@@ -318,25 +324,11 @@ alu_control m_alu_control(
 
 mux_2x1 m_mux_2x1(
   .select(ex_alu_src),
-  .in1(ex_readdata2),
+  .in1(ex_alu_in2_temp),
   .in2(ex_sextimm),
   
-  .out(ex_alu_in2_temp)
+  .out(ex_alu_in2)
 );
-
-wire mem_mem_read;
-wire mem_mem_write;
-wire mem_mem_to_reg;
-wire mem_reg_write;
-wire [1:0] mem_alu_op;
-wire mem_alu_src;
-wire [31:0] ex_alu_in1;
-wire [31:0] ex_alu_result;
-wire [31:0] mem_alu_result;
-wire [31:0] wb_alu_result;
-
-wire[1:0] forwarding_1;
-wire[1:0] forwarding_2;
 
 forwarding m_forwarding(
   // TODO: implement forwarding unit & do wiring
@@ -363,11 +355,11 @@ mux_3x1 m_mux_3x1(
 
 mux_3x1 m_mux_3x1_2(
   .select(forwarding_2),
-  .in1(ex_alu_in2_temp),
+  .in1(ex_readdata2),
   .in2(write_data),
   .in3(mem_alu_result),
   
-  .out(ex_alu_in2)
+  .out(ex_alu_in2_temp)
 );
 
 //assign ex_alu_in1 = ex_readdata1;
@@ -392,9 +384,9 @@ exmem_reg m_exmem_reg(
   .ex_taken       (ex_taken), 
   .ex_jump        (ex_jump),
   .ex_memread     (ex_mem_read),
-  .ex_memwrite    (ex_memwrite),
+  .ex_memwrite    (ex_mem_write),
   .ex_memtoreg    (ex_mem_to_reg),
-  .ex_regwrite    (ex_regwrite),
+  .ex_regwrite    (ex_reg_write),
   .ex_alu_result  (ex_alu_result),
   .ex_writedata   (ex_readdata2),
   .ex_funct3      (ex_funct3),
@@ -421,31 +413,6 @@ exmem_reg m_exmem_reg(
 // Memory (MEM) 
 //////////////////////////////////////////////////////////////////////////////////
 
-wire [31:0] branch_out;
-
-mux_2x1 m_mux_2x1_branch(
-  .select(mem_taken),
-  .in1(mem_PC_PLUS_4),
-  .in2(mem_PC_BRANCH),
-  
-  .out(branch_out)
-);
-
-mux_4x1 m_mux_4x1(
-  .select(mem_jump),
-  .in1(branch_out),
-  .in2(branch_out),
-  .in3(mem_PC_BRANCH),
-  .in4(mem_jalr_out),
-  
-  .out(NEXT_PC)
-);
-
-wire [1:0] maskmode ;
-assign maskmode = mem_funct3[1:0];
-wire [DATA_WIDTH-1:0] read_data;
-wire [DATA_WIDTH-1:0] wb_read_data;
-
 /* m_data_memory : main memory module */
 data_memory m_data_memory(
   .clk         (clk),
@@ -458,9 +425,6 @@ data_memory m_data_memory(
 
   .read_data   (read_data)
 );
-
-wire wb_mem_to_reg;
-wire [1:0] wb_jump;
 
 /* forward to MEM/WB stage registers */
 memwb_reg m_memwb_reg(

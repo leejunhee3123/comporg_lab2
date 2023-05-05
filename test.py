@@ -78,7 +78,7 @@ def main():
         else:
             print("------ [failed] -----")
             os.system("cat ./data/stat.out")
-            break
+            
 
 
 

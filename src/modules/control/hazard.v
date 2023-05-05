@@ -6,34 +6,55 @@
 // hazard detection unit
 
 module hazard (
-
-    input mem_taken,
-    input [31:0] mem_PC_PLUS_4,
-    input [31:0] mem_PC_BRANCH,
-    input [1:0] mem_jump,
-    input [31:0] mem_jalr_out,
-    input [31:0] id_pc,
-
-
+    input ex_taken,
+    input [31:0] ex_PC_PLUS_4,
+    input [31:0] ex_PC_BRANCH,
+    input [1:0] ex_jump,
+    input [31:0] ex_jalr_out,
+    input [31:0] pc_plus_4,
+    input [4:0] ex_writereg,
+    input ex_mem_read,
+    input [4:0] id_rs1,
+    input [4:0] id_rs2,
+    input [31:0] jalr_out,
+    input [31:0] pc,
+  
+    output stall,
+    output stall_reg_position,
+    output reg [31:0] NEXT_PC,
     output flush
 );
-
-reg NEXT_PC;
+reg stall;
+reg stall_reg_position;
 reg flush;
-reg id_memwrite;
-reg id_regwrite;
-reg ex_memwrite;
-reg ex_regwrite;
 
 always @(*) begin
-    if ((!mem_taken)&&(mem_jump==2'b00)) begin
+    if ((!ex_taken)&&(ex_jump==2'b00)) begin
         flush=0;
-    end else if ((mem_taken)||(mem_jump==2'b10)) begin
+        NEXT_PC=pc_plus_4;
+    end else if ((ex_taken)||(ex_jump==2'b10)) begin
         flush=1;
-    end else if (mem_jump==2'b11) begin
+        NEXT_PC=ex_PC_BRANCH;
+    end else if (ex_jump==2'b11) begin
         flush=1;
+        NEXT_PC=jalr_out;
+    end else begin
+        flush=0;
+        NEXT_PC=pc_plus_4;
     end
 
+
+    if ((ex_writereg != 5'b00000)&&(ex_mem_read)&&((id_rs1==ex_writereg)||(id_rs2==ex_writereg))) begin
+        stall=1;
+        NEXT_PC=pc;
+        if(id_rs1==ex_writereg) begin
+            stall_reg_position=0;
+        end else if (id_rs2==ex_writereg) begin
+            stall_reg_position=1;
+        end
+    end else begin
+        stall=0;
+    end
 
 end
 

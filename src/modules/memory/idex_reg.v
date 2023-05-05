@@ -37,6 +37,9 @@ module idex_reg #(
   input [4:0] id_rs1,
   input [4:0] id_rs2,
   input [4:0] id_rd,
+  input stall,
+  input [DATA_WIDTH-1:0] NEXT_PC_,
+  input flush,
 
   //////////////////////////////////////
   // Outputs
@@ -65,7 +68,10 @@ module idex_reg #(
   output [DATA_WIDTH-1:0] ex_readdata2,
   output [4:0] ex_rs1,
   output [4:0] ex_rs2,
-  output [4:0] ex_rd
+  output [4:0] ex_rd,
+  output ex_stall,
+  output ex_flush,
+  output [DATA_WIDTH-1:0] ex_NEXT_PC_
 );
 
 // TODO: Implement ID/EX pipeline register module
@@ -88,26 +94,46 @@ reg ex_readdata2;
 reg ex_rs1;
 reg ex_rs2;
 reg ex_rd;
+reg ex_stall;
+reg ex_NEXT_PC_;
+reg ex_flush;
 
 always @(posedge clk) begin
-  ex_PC<=id_PC;
-  ex_pc_plus_4<=id_pc_plus_4;
-  ex_jump<=id_jump;
-  ex_branch<=id_branch;
-  ex_aluop<=id_aluop;
-  ex_alusrc<=id_alusrc;
-  ex_memread<=id_memread;
-  ex_memwrite<=id_memwrite;
-  ex_memtoreg<=id_memtoreg;
-  ex_regwrite<=id_regwrite;
-  ex_sextimm<=id_sextimm;
-  ex_funct7<=id_funct7;
-  ex_funct3<=id_funct3;
-  ex_readdata1<=id_readdata1;
-  ex_readdata2<=id_readdata2;
-  ex_rs1<=id_rs1;
-  ex_rs2<=id_rs2;
-  ex_rd<=id_rd;
+  if (ex_flush) begin
+    ex_memwrite<=0;
+    ex_regwrite<=0;
+    ex_flush <= flush;
+  end else begin
+    ex_PC<=id_PC;
+    ex_pc_plus_4<=id_pc_plus_4;
+    ex_jump<=id_jump;
+    ex_branch<=id_branch;
+    ex_aluop<=id_aluop;
+    ex_alusrc<=id_alusrc;
+    ex_memread<=id_memread;
+    ex_memwrite<=id_memwrite;
+    ex_memtoreg<=id_memtoreg;
+    ex_regwrite<=id_regwrite;
+    ex_sextimm<=id_sextimm;
+    ex_funct7<=id_funct7;
+    ex_funct3<=id_funct3;
+    ex_readdata1<=id_readdata1;
+    ex_readdata2<=id_readdata2;
+    ex_rs1<=id_rs1;
+    ex_rs2<=id_rs2;
+    ex_rd<=id_rd;
+    ex_stall<=stall;
+    ex_NEXT_PC_<=NEXT_PC_;
+    ex_flush <= flush;
+  end
+  if (stall||flush||ex_flush) begin
+    ex_memwrite<=0;
+    ex_regwrite<=0;
+    ex_branch<=0;
+    ex_jump<=2'b00;
+    ex_readdata1=0;
+    ex_readdata2=0;
+  end
 end
 
 
